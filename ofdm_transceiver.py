@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from IPython import display
 
+# TODO: Exclude following libs in next release:
+import sionna as sn
+import tensorflow as tf
+
 def create_preamble(N_FFT, CP_len, N_repeat = 2):
     '''
     Creates Preamble for synchronization and CFO compensation
@@ -10,9 +14,12 @@ def create_preamble(N_FFT, CP_len, N_repeat = 2):
     TODO: from https://liusc1028.github.io/papers/ISPLC13.pdf
     implement Minn's and Proposed methods
     '''
-    preamble = 1 - 2 * np.random.randint(0, 2, size=(int(N_fft/2), 1))
+    # random BPSK symbols
+    preamble = 1 - 2 * np.random.randint(0, 2, size=(int(N_FFT/2), 1))
     preamble = np.complex64(preamble)
+    # repeat preamble
     preamble_full = np.tile(preamble, (N_repeat, 1))
+    # add cyclic prefix
     preamble_full_cp = np.concatenate((preamble_full[-CP_len:], preamble_full))
     return preamble_full_cp
 
@@ -26,8 +33,38 @@ def generate_bits(N_subcarriers: int, N_bits_per_conts_point:int):
     Returns:
         ndarray: returns bits 
     """
-    data_stream =  np.random.binomial(n = 1, p = 0.5, size = ( N_subcarriers, N_bits_per_conts_point))
+    data_stream =  np.random.binomial(n = 1, p = 0.5, size = (N_subcarriers*N_bits_per_conts_point))
     return data_stream
+
+def qam_modulate(bits, num_bits_per_symbol):
+    """Applies QAM modulation for provided bitsteam
+    TODO Temporary algorithm! Reimplement same modem with numpy logic.
+
+    Args:
+        bits (ndarray): array of bits with shape of [1 x N_symbols*num_bits_per_symbol]
+        num_bits_per_symbol (int): number of bits per QAM symbol
+
+    Returns:
+        ndarray: Normalized QAM symbols with shape of [1 x N_symbols]
+    """
+    constellation = sn.mapping.Constellation("qam", num_bits_per_symbol)
+    mapper = sn.mapping.Mapper(constellation = constellation)
+    return mapper(tf.convert_to_tensor(bits[None,...])).numpy()
+
+def qam_demodulate(signal, num_bits_per_symbol):
+    """ QAM demodulator with soft decision. 
+    TODO Temporary algorithm! Reimplement same modem with numpy logic.
+
+    Args:
+        signal (ndarray): aatay with QAM symbols with shape of [1 x N_symbols]
+        num_bits_per_symbol (int): number of bits per QAM symbol
+
+    Returns:
+        ndarray: demodulated bitstream with shape of [1 x N_symbols*num_bits_per_symbol]
+    """
+    constellation = sn.mapping.Constellation("qam", num_bits_per_symbol)
+    demapper = sn.mapping.Demapper("app", constellation = constellation)
+    return (demapper([tf.convert_to_tensor(signal), 0.0]).numpy() > 0).astype(np.int64)
 
 
 def create_data(N_sc, N_fft, CP_len, dc_offset = False, aditional_return = None):

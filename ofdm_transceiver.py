@@ -66,6 +66,33 @@ def qam_demodulate(signal, num_bits_per_symbol):
     demapper = sn.mapping.Demapper("app", constellation = constellation)
     return (demapper([tf.convert_to_tensor(signal), 0.0]).numpy() > 0).astype(np.int64)
 
+def form_baseband_ofdm_symb(qam_symb, N_FFT, CP_len, dc_offset = False):
+    """Form timedomain baseband OFDM symbol using input QAM symbols 
+
+    Args:
+        qam_symb (ndarray): array of QAM symbols
+        N_FFT (int): Number of FFT samples
+        CP_len (int): Cyclic prefix length
+        dc_offset (bool, optional): Whether use DC component for allocating data. Defaults to False.
+
+    Returns:
+        ndarray: time-domain baseband OFDM symbol with cyclic prefix
+    """
+    qam_symb = qam_symb.ravel()
+    N_subcarriers = qam_symb.shape[0]
+    assert N_subcarriers < N_FFT, 'Cannot send more symbols than FFT size'
+    dc = int(dc_offset)
+    
+    # Frequency-domain baseband OFDM symbol
+    tx_ofdm_symb = np.zeros((N_FFT), dtype = np.complex64)
+    tx_ofdm_symb[dc : N_subcarriers//2 + dc] = qam_symb[N_subcarriers//2:]
+    tx_ofdm_symb[-N_subcarriers//2:] = qam_symb[:N_subcarriers//2]
+
+    # Time-domain baseband OFDM symbol 
+    time_ofdm_sym_pilot = np.fft.ifft(tx_ofdm_symb, axis = 0, norm = 'ortho')
+    time_ofdm_sym_cp_pilot = np.concatenate( (time_ofdm_sym_pilot[-CP_len:], time_ofdm_sym_pilot) )
+    return time_ofdm_sym_cp_pilot
+
 
 def create_data(N_sc, N_fft, CP_len, dc_offset = False, aditional_return = None):
     

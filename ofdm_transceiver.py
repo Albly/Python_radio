@@ -30,6 +30,48 @@ def create_preamble(N_FFT:int, CP_len:int, N_repeat:int = 2):
     preamble_full_cp = np.concatenate((preamble_full[-CP_len:], preamble_full))
     return preamble_full_cp
 
+def ZadoffChu_gen(n_US, M_sc, ID_Ue):
+    '''Generates a Zadoff-Chu sequence used for cell search and synchronization in LTE networks.
+
+    Inputs:
+       n_US  - The number of unique sequences.
+       M_sc  - The number of subcarriers.
+       ID_Ue - The unique identifier for the user equipment (UE).
+
+    Output:
+       out   - The generated Zadoff-Chu sequence.
+    '''
+
+    # Configuration for Zadoff-Chu sequence generation
+    N_ap = 1                                                    # Number of antenna ports
+
+    # Length of Zadoff-Chu sequence, chosen as the max prime less than M_sc
+    N_zc = max([p for p in range(2, M_sc) if all(p % n != 0 for n in range(2, p))])
+    n = np.arange(N_zc)                                         # Base sequence index
+
+    # Generate the base Zadoff-Chu sequence
+    q = 10                                                      # Base root index (should be relatively prime to N_zc)
+    x_q = np.exp(-2j * np.pi * q * n * (n + 1) / (2 * N_zc))
+    k = np.arange(M_sc)                                         # Subcarrier indices
+    r = x_q[np.mod(k, N_zc)]                                    # The sequence repeated for all subcarriers
+
+    # Calculate the cyclic shift for the sequence
+    n_rs = ID_Ue                                                # UE-specific sequence number
+    p = np.arange(N_ap)                                         # Antenna port indices
+    N_rs = np.mod(n_rs + n_US * p / N_ap, n_US)                 # Cyclic shift calculation
+    alpha = 2 * np.pi * N_rs / n_US                             # Cyclic shift phase
+    n = np.arange(len(r))                                       # Index for the final sequence
+
+    # Initialize the output sequence matrix
+    out = np.zeros((M_sc, N_ap), dtype = complex)
+
+    # Apply the cyclic shift to generate the Zadoff-Chu sequence for each antenna port
+    for index_antenna in range(len(alpha)):
+        out[:, index_antenna] = np.exp(1j * alpha[index_antenna] * n) * r
+
+    return out
+
+
 def generate_bits(N_subcarriers:int, N_bits_per_conts_point:int):
     """generates random sequence of bits with defined size
 
